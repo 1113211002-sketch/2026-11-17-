@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARCADE HUB | 獨立遊戲實驗室</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Google Fonts: Noto Sans TC, Orbitron (科技感標題), Press Start 2P (復古像素) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Orbitron:wght@600;800;900&family=Press+Start+2P&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', 'sans-serif'],
+                        display: ['"Orbitron"', '"Noto Sans TC"', 'sans-serif'],
+                        pixel: ['"Press Start 2P"', 'monospace'],
+                    },
+                    colors: {
+                        cyber: {
+                            dark: '#070913',
+                            card: 'rgba(17, 24, 39, 0.65)',
+                            cyan: '#00f3ff',
+                            pink: '#ff007f',
+                            purple: '#9d4edd',
+                            amber: '#ffb703'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* 自訂暗黑霓虹網格與動態光暈背景 */
+        body {
+            background-color: #070913;
+            color: #f8fafc;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 20%, rgba(0, 243, 255, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 85% 75%, rgba(255, 0, 127, 0.08) 0%, transparent 45%);
+        }
+
+        /* 透視霓虹網格地板特效 */
+        .cyber-grid {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-size: 48px 48px;
+            background-image: 
+                linear-gradient(to right, rgba(0, 243, 255, 0.04) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 243, 255, 0.04) 1px, transparent 1px);
+            mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 40%, transparent 100%);
+            -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 40%, transparent 100%);
+            pointer-events: none;
+        }
+
+        /* 玻璃擬態卡片與懸停發光動畫 */
+        .game-card {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .game-card:hover {
+            transform: translateY(-8px);
+            border-color: var(--card-accent, #00f3ff);
+            box-shadow: 
+                0 20px 40px -15px rgba(0, 0, 0, 0.7),
+                0 0 25px -5px var(--card-glow, rgba(0, 243, 255, 0.35));
+        }
+
+        /* 卡片封面內部動畫 */
+        .game-card:hover .cover-art-svg {
+            transform: scale(1.06);
+        }
+        .cover-art-svg {
+            transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        /* 霓虹文字光暈 */
+        .neon-text-cyan {
+            text-shadow: 0 0 12px rgba(0, 243, 255, 0.6), 0 0 28px rgba(0, 243, 255, 0.3);
+        }
+        .neon-text-pink {
+            text-shadow: 0 0 12px rgba(255, 0, 127, 0.6), 0 0 28px rgba(255, 0, 127, 0.3);
+        }
+
+        /* 掃描線質感 */
+        .scanlines {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.22) 50%,
+                rgba(0,0,0,0.22)
+            );
+            background-size: 100% 4px;
+        }
+
+        /* 浮動動畫 */
+        @keyframes floatSlow {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-6px); }
+        }
+        .animate-float {
+            animation: floatSlow 3.5s ease-in-out infinite;
+        }
+
+        /* 自訂捲軸 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #070913;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00f3ff;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-cyan-500 selection:text-slate-950">
+
+    <!-- 背景網格與微光畫布 -->
+    <div class="cyber-grid"></div>
+    <canvas id="particle-canvas" class="fixed inset-0 -z-10 pointer-events-none opacity-60"></canvas>
+
+    <!-- 頂部導覽列 -->
+    <header class="sticky top-0 z-40 border-b border-white/10 bg-[#070913]/80 backdrop-blur-xl">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-4">
+            <!-- 品牌標題區 -->
+            <a href="#" onclick="resetFilters(event)" class="flex items-center gap-3 group">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-fuchsia-600 p-[2px] shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-400/40 transition-shadow">
+                    <div class="w-full h-full bg-[#070913] rounded-[10px] flex items-center justify-center">
+                        <!-- 搖桿 SVG 圖示 -->
+                        <svg class="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="6" y1="12" x2="10" y2="12"></line>
+                            <line x1="8" y1="10" x2="8" y2="14"></line>
+                            <line x1="15" y1="13" x2="15.01" y2="13"></line>
+                            <line x1="18" y1="11" x2="18.01" y2="11"></line>
+                            <rect x="2" y="6" width="20" height="12" rx="4"></rect>
+                        </svg>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-display font-black text-lg sm:text-xl tracking-wider bg-gradient-to-r from-cyan-300 via-white to-fuchsia-400 bg-clip-text text-transparent">
+                            ARCADE HUB
+                        </span>
+                        <span id="game-count-badge" class="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-400/30">
+                            2 款已上線
+                        </span>
+                    </div>
+                    <p class="text-[11px] sm:text-xs text-slate-400 tracking-widest font-medium">獨立遊戲實驗室 • INDIE LAB</p>
+                </div>
+            </a>
+
+            <!-- 分類篩選標籤 (桌面版與平板) -->
+            <nav id="category-filters" class="flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-1 no-scrollbar">
+                <!-- 由 JavaScript 動態生成篩選按鈕 -->
+            </nav>
+        </div>
+    </header>
+
+    <!-- 主要內容區 -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-12 pb-20">
+        
+        <!-- Hero 主視覺區 -->
+        <section class="text-center max-w-3xl mx-auto mb-10 sm:mb-14">
+            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs sm:text-sm text-cyan-300 mb-5 shadow-inner">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                <span class="font-medium tracking-wide">HTML5 零安裝 • 打開瀏覽器即刻開戰</span>
+            </div>
+
+            <h1 class="text-3xl sm:text-5xl font-black tracking-tight text-white mb-4 leading-tight">
+                探索我的 <span class="text-cyan-400 neon-text-cyan">復古街機</span> 與 <span class="text-fuchsia-400 neon-text-pink">實驗遊戲</span> 宇宙
+            </h1>
+            
+            <p class="text-slate-400 text-sm sm:text-base leading-relaxed mb-8 px-2">
+                這裡收錄了所有親手打造的獨立網頁小遊戲。無需下載、支援電腦鍵盤與手機觸控，點擊卡片即可在當前大廳視窗或新分頁中直接遊玩！
+            </p>
+
+            <!-- 搜尋框與模式提示 -->
+            <div class="relative max-w-xl mx-auto">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+                <input 
+                    type="text" 
+                    id="search-input" 
+                    placeholder="搜尋遊戲名稱、英文代號或標籤（例如：太空、像素、高分）..." 
+                    class="w-full pl-11 pr-10 py-3.5 rounded-2xl bg-slate-900/80 border border-white/15 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 transition-all shadow-xl text-sm sm:text-base"
+                >
+                <button 
+                    id="clear-search-btn" 
+                    onclick="clearSearch()" 
+                    class="hidden absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white"
+                    title="清除搜尋"
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </section>
+
+        <!-- 遊戲列表標題與統計列 -->
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-6 pb-3 border-b border-white/10">
+            <div class="flex items-center gap-2.5">
+                <span class="w-1.5 h-6 rounded-full bg-gradient-to-b from-cyan-400 to-fuchsia-500"></span>
+                <h2 id="section-title" class="text-lg sm:text-xl font-bold text-white tracking-wide">全部遊戲庫</h2>
+                <span id="visible-count" class="text-xs font-mono px-2 py-0.5 rounded bg-white/10 text-slate-300">3</span>
+            </div>
+
+            <!-- 遊玩啟動模式切換開關 -->
+            <div class="flex items-center gap-2 text-xs sm:text-sm bg-slate-900/90 p-1.5 rounded-xl border border-white/10">
+                <span class="text-slate-400 pl-2 hidden sm:inline">點擊卡片行為：</span>
+                <button id="mode-modal-btn" onclick="setLaunchMode('modal')" class="px-3 py-1.5 rounded-lg font-medium transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-sm">
+                    大廳視窗內嵌玩
+                </button>
+                <button id="mode-tab-btn" onclick="setLaunchMode('tab')" class="px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white">
+                    直接跳轉開啟
+                </button>
+            </div>
+        </div>
+
+        <!-- 遊戲展示卡片網格 (Responsive Grid) -->
+        <section id="games-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            <!-- 遊戲卡片將由 JavaScript 根據 GAMES_DATA 自動渲染於此 -->
+        </section>
+
+        <!-- 找不到搜尋結果時的空狀態提示 -->
+        <div id="empty-state" class="hidden text-center py-16 px-4 rounded-3xl bg-slate-900/40 border border-white/5 mt-4">
+            <div class="text-4xl mb-3">👾</div>
+            <h3 class="text-lg font-bold text-white mb-1">找不到符合條件的遊戲</h3>
+            <p class="text-slate-400 text-sm mb-5">試試看其他關鍵字，或切換回「全部」分類瀏覽所有作品。</p>
+            <button onclick="resetFilters()" class="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm transition-colors">
+                顯示全部遊戲
+            </button>
+        </div>
+
+    </main>
+
+    <!-- 頁尾 -->
+    <footer class="border-t border-white/10 bg-[#05070f]/90 py-8 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs sm:text-sm text-slate-400">
+            <div class="flex items-center gap-2">
+                <span class="font-display font-bold text-slate-200">ARCADE HUB</span>
+                <span>•</span>
+                <span>Built with HTML5 Canvas, Tailwind & Vanilla JS</span>
+            </div>
+            <div class="text-slate-500">
+                提示：新增遊戲只需編輯 <code class="text-cyan-400 bg-cyan-950/50 px-1.5 py-0.5 rounded">index.html</code> 內的 <code class="text-fuchsia-400 bg-fuchsia-950/50 px-1.5 py-0.5 rounded">GAMES_DATA</code> 陣列
+            </div>
+        </div>
+    </footer>
+
+    <!-- =====================================================================
+         全螢幕視窗內嵌遊玩器 (Modal Iframe Player)
+         讓玩家不用離開首頁就能直接玩遊戲，並提供返回大廳、重整與新分頁功能
+         ===================================================================== -->
+    <div id="game-modal" class="fixed inset-0 z-50 hidden flex-col bg-[#05070f]/95 backdrop-blur-xl transition-opacity duration-300">
+        <!-- 遊戲播放器頂部控制列 -->
+        <div class="h-14 sm:h-16 px-4 sm:px-6 border-b border-white/10 bg-slate-950/90 flex items-center justify-between gap-3 shrink-0">
+            <div class="flex items-center gap-3 min-w-0">
+                <button onclick="closeGameModal()" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/40 border border-white/10 text-white text-xs sm:text-sm font-bold transition-all shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    <span>返回大廳</span>
+                </button>
+                <div class="truncate">
+                    <h3 id="modal-game-title" class="font-bold text-white text-sm sm:text-base truncate">遊戲名稱</h3>
+                    <p id="modal-game-subtitle" class="text-[11px] text-cyan-400 font-display truncate">GAME SUBTITLE</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+                <!-- 重新載入遊戲 -->
+                <button onclick="reloadGameIframe()" title="重新啟動遊戲" class="p-2.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-white transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                </button>
+                <!-- 切換全螢幕 -->
+                <button onclick="toggleModalFullscreen()" title="全螢幕模式" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+                    </svg>
+                    <span>全螢幕</span>
+                </button>
+                <!-- 在新分頁開啟原始檔案 -->
+                <a id="modal-external-link" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-300 text-xs sm:text-sm font-bold transition-colors">
+                    <span>獨立視窗</span>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                    </svg>
+                </a>
+            </div>
+        </div>
+
+        <!-- Iframe 遊戲容器 -->
+        <div class="relative flex-grow w-full h-full bg-black flex items-center justify-center overflow-hidden">
+            <div id="iframe-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-[#070913] z-10 pointer-events-none transition-opacity duration-300">
+                <div class="w-12 h-12 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin mb-3"></div>
+                <p class="text-cyan-300 font-display text-sm tracking-widest animate-pulse">LOADING CARTRIDGE...</p>
+            </div>
+            <iframe id="game-iframe" src="about:blank" class="w-full h-full border-0" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>
+        </div>
+    </div>
+
+    <!-- 自訂提示訊息 Toast（取代原生 alert） -->
+    <div id="toast-box" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none">
+        <div class="flex items-center gap-3 px-5 py-3.5 rounded-2xl bg-slate-900/95 border border-fuchsia-500/40 shadow-2xl shadow-fuchsia-500/20 backdrop-blur-md">
+            <span class="text-xl">🚧</span>
+            <div>
+                <h4 id="toast-title" class="text-sm font-bold text-white">新遊戲正在秘密開發中！</h4>
+                <p id="toast-desc" class="text-xs text-slate-400">敬請期待下一次版本更新。</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * 【未來擴充超簡單指南 - 遊戲資料庫設定區】
+         * ============================================================================
+         * 未來當你做好一款新遊戲（例如 `snake-neon.html`）並放進與 `index.html` 相同的資料夾後：
+         * 1. 只要複製下方任意一個 `{ ... }` 遊戲物件區塊，貼上到陣列中（建議貼在「敬請期待」卡片之前）。
+         * 2. 修改 `id`、`title`、`subtitle`、`category`、`tags`、`url` 與 `description`。
+         * 3. 存檔後重新整理網頁，首頁就會自動長出新的遊戲卡片、自動更新遊戲總數與分類篩選按鈕！
+         *    完全不需要修改任何 HTML 結構或 CSS 排版！
+         * 
+         * 欄位說明：
+         * - id          : 唯一識別碼（英文小寫與連字號，不可重複）
+         * - title       : 遊戲中文主標題
+         * - subtitle    : 遊戲英文副標題（顯示在標題旁，增加街機質感）
+         * - category    : 遊戲分類（例如：'射擊動作'、'休閒街機'，若填寫新分類名稱，上方導覽列會自動新增該分類按鈕！）
+         * - tags        : 標籤陣列，供搜尋與卡片展示用（例如：['太空射擊', '街機動作']）
+         * - url         : 遊戲檔案的相對路徑（例如：'./star-defender.html'），若為開發中可填 null
+         * - themeColor  : 主題色系，可選 'cyan' (霓虹藍), 'emerald' (像素綠), 'pink' (賽博粉), 'amber' (街機金)
+         * - coverType   : 封面 SVG 圖樣代號，可選 'spaceship' (太空船), 'bird' (像素飛鳥), 'coming-soon' (敬請期待), 或 'custom' (通用搖桿圖示)
+         * - controlHint : 操作方式簡短提示（顯示在卡片底部）
+         * - scoreKeys   : (選填) 嘗試從瀏覽器 localStorage 讀取最高分的鍵名陣列，若有紀錄會自動顯示「最高紀錄」徽章
+         * - description : 遊戲簡介文案（建議 35~60 字以內）
+         * - comingSoon  : (選填) 設為 true 時會顯示為「開發中 / 敬請期待」鎖定狀態卡片
+         * ============================================================================
+         */
+        const GAMES_DATA = [
+            {
+                id: 'star-defender',
+                title: '星際捍衛者',
+                subtitle: 'STAR DEFENDER',
+                category: '射擊動作',
+                tags: ['太空射擊', '街機動作', '彈幕挑戰'],
+                url: './star-defender.html',
+                themeColor: 'cyan',
+                coverType: 'spaceship',
+                controlHint: '鍵盤方向鍵 / 滑鼠移動射擊',
+                scoreKeys: ['starDefenderHighScore', 'star_defender_highscore', 'starDefenderBest', 'highScore'],
+                description: '駕駛霓虹戰機穿梭深空星域，閃避密集隕石與外星艦隊火力，升級雷射武器奪下銀河最高分！',
+                comingSoon: false
+            },
+            {
+                id: 'freepy-bird',
+                title: '像素飛鳥',
+                subtitle: 'FREEPY BIRD',
+                category: '休閒街機',
+                tags: ['休閒街機', '高分挑戰', '復古像素'],
+                url: './freepy-bird.html',
+                themeColor: 'emerald',
+                coverType: 'bird',
+                controlHint: '點擊畫面 / 空白鍵拍動翅膀',
+                scoreKeys: ['freepyBirdHighScore', 'freepy_bird_highscore', 'flappyHighScore', 'bestScore'],
+                description: '經典復古像素風格高分挑戰！精準掌握每一次拍翅節奏，穿越無盡的綠色水管陣列，挑戰你的極限反應。',
+                comingSoon: false
+            },
+            // 👇 未來新增遊戲時，可以直接把新物件貼在這裡！
+            {
+                id: 'next-project',
+                title: '神秘新作開發中',
+                subtitle: 'COMING SOON',
+                category: '敬請期待',
+                tags: ['實驗原型', '即將上線'],
+                url: null,
+                themeColor: 'pink',
+                coverType: 'coming-soon',
+                controlHint: '敬請期待下一款獨立作品',
+                scoreKeys: [],
+                description: '全新的 HTML5 街機遊戲正在實驗室緊鑼密鼓編譯中，準備好迎接下一場像素與霓虹的冒險吧！',
+                comingSoon: true
+            }
+        ];
+
+        // ============================================================================
+        // 應用程式狀態管理
+        // ============================================================================
+        let currentCategory = '全部';
+        let searchQuery = '';
+        let launchMode = 'modal'; // 'modal' (大廳視窗內嵌遊玩) 或 'tab' (直接跳轉開啟)
+
+        // 主題色系對照表
+        const THEME_STYLES = {
+            cyan: {
+                accent: '#00f3ff',
+                glow: 'rgba(0, 243, 255, 0.35)',
+                badgeBg: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/30',
+                btnBg: 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 shadow-cyan-500/25',
+                subtitleText: 'text-cyan-400'
+            },
+            emerald: {
+                accent: '#10b981',
+                glow: 'rgba(16, 185, 129, 0.35)',
+                badgeBg: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30',
+                btnBg: 'bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-slate-950 shadow-emerald-500/25',
+                subtitleText: 'text-emerald-400'
+            },
+            pink: {
+                accent: '#ff007f',
+                glow: 'rgba(255, 0, 127, 0.35)',
+                badgeBg: 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-400/30',
+                btnBg: 'bg-white/10 hover:bg-white/15 text-slate-300 border border-white/15',
+                subtitleText: 'text-fuchsia-400'
+            },
+            amber: {
+                accent: '#ffb703',
+                glow: 'rgba(255, 183, 3, 0.35)',
+                badgeBg: 'bg-amber-500/15 text-amber-300 border-amber-400/30',
+                btnBg: 'bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 shadow-amber-500/25',
+                subtitleText: 'text-amber-400'
+            }
+        };
+
+        // ============================================================================
+        // 內建精緻 SVG 封面生成器 (零外部圖片依賴)
+        // ============================================================================
+        function getCoverSVG(coverType) {
+            if (coverType === 'spaceship') {
+                return `
+                <svg class="cover-art-svg w-full h-full object-cover" viewBox="0 0 400 220" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="spaceBg" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#050816"/>
+                            <stop offset="50%" stop-color="#0b132b"/>
+                            <stop offset="100%" stop-color="#1c0b36"/>
+                        </linearGradient>
+                        <radialGradient id="nebulaGlow" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#00f3ff" stop-opacity="0.35"/>
+                            <stop offset="60%" stop-color="#9d4edd" stop-opacity="0.12"/>
+                            <stop offset="100%" stop-color="#050816" stop-opacity="0"/>
+                        </radialGradient>
+                        <linearGradient id="shipBody" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#ffffff"/>
+                            <stop offset="50%" stop-color="#94a3b8"/>
+                            <stop offset="100%" stop-color="#334155"/>
+                        </linearGradient>
+                        <linearGradient id="laserBeam" x1="0%" y1="100%" x2="0%" y2="0%">
+                            <stop offset="0%" stop-color="#00f3ff" stop-opacity="0.1"/>
+                            <stop offset="50%" stop-color="#00f3ff" stop-opacity="0.9"/>
+                            <stop offset="100%" stop-color="#ffffff" stop-opacity="1"/>
+                        </linearGradient>
+                    </defs>
+                    <rect width="400" height="220" fill="url(#spaceBg)"/>
+                    <circle cx="200" cy="110" r="130" fill="url(#nebulaGlow)"/>
+                    
+                    <!-- 透視星際網格 -->
+                    <g stroke="#00f3ff" stroke-opacity="0.15" stroke-width="1">
+                        <line x1="0" y1="180" x2="400" y2="180"/>
+                        <line x1="0" y1="205" x2="400" y2="205"/>
+                        <line x1="120" y1="150" x2="40" y2="220"/>
+                        <line x1="200" y1="150" x2="200" y2="220"/>
+                        <line x1="280" y1="150" x2="360" y2="220"/>
+                    </g>
+
+                    <!-- 閃爍星星 -->
+                    <circle cx="55" cy="40" r="1.8" fill="#fff" opacity="0.8"/>
+                    <circle cx="110" cy="75" r="1.2" fill="#00f3ff" opacity="0.9"/>
+                    <circle cx="330" cy="45" r="2" fill="#ff007f" opacity="0.8"/>
+                    <circle cx="290" cy="85" r="1.5" fill="#fff" opacity="0.7"/>
+                    <circle cx="75" cy="130" r="1.5" fill="#fff" opacity="0.6"/>
+                    <circle cx="350" cy="140" r="1.2" fill="#00f3ff" opacity="0.8"/>
+
+                    <!-- 敵方外星戰機剪影 -->
+                    <g transform="translate(120, 38)" opacity="0.85">
+                        <polygon points="15,0 30,12 22,18 8,18 0,12" fill="#ff007f" stroke="#ff75b5" stroke-width="1"/>
+                        <circle cx="15" cy="10" r="3" fill="#fff"/>
+                    </g>
+                    <g transform="translate(260, 48)" opacity="0.85">
+                        <polygon points="15,0 30,12 22,18 8,18 0,12" fill="#ff007f" stroke="#ff75b5" stroke-width="1"/>
+                        <circle cx="15" cy="10" r="3" fill="#fff"/>
+                    </g>
+
+                    <!-- 雙管霓虹雷射光束 -->
+                    <rect x="174" y="25" width="4" height="80" rx="2" fill="url(#laserBeam)"/>
+                    <rect x="222" y="25" width="4" height="80" rx="2" fill="url(#laserBeam)"/>
+
+                    <!-- 主角霓虹太空船 -->
+                    <g transform="translate(200, 128)">
+                        <!-- 推進器尾焰 -->
+                        <polygon points="-10,32 0,56 10,32" fill="#00f3ff" opacity="0.85"/>
+                        <polygon points="-5,32 0,46 5,32" fill="#ffffff"/>
+                        <!-- 機翼 -->
+                        <polygon points="0,-34 -46,24 -16,28 0,14 16,28 46,24" fill="#1e293b" stroke="#00f3ff" stroke-width="2"/>
+                        <!-- 副翼霓虹飾條 -->
+                        <line x1="-34" y1="16" x2="-18" y2="2" stroke="#ff007f" stroke-width="2.5" stroke-linecap="round"/>
+                        <line x1="34" y1="16" x2="18" y2="2" stroke="#ff007f" stroke-width="2.5" stroke-linecap="round"/>
+                        <!-- 主機身 -->
+                        <polygon points="0,-42 -14,26 0,34 14,26" fill="url(#shipBody)"/>
+                        <!-- 駕駛艙罩 -->
+                        <ellipse cx="0" cy="-4" rx="5" ry="12" fill="#00f3ff"/>
+                        <ellipse cx="-1.5" cy="-7" rx="2" ry="6" fill="#ffffff" opacity="0.8"/>
+                    </g>
+                </svg>`;
+            }
+
+            if (coverType === 'bird') {
+                return `
+                <svg class="cover-art-svg w-full h-full object-cover" viewBox="0 0 400 220" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="pixelSky" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#0f2942"/>
+                            <stop offset="65%" stop-color="#1d4ed8"/>
+                            <stop offset="100%" stop-color="#38bdf8"/>
+                        </linearGradient>
+                        <linearGradient id="pipeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#15803d"/>
+                            <stop offset="30%" stop-color="#4ade80"/>
+                            <stop offset="70%" stop-color="#22c55e"/>
+                            <stop offset="100%" stop-color="#14532d"/>
+                        </linearGradient>
+                    </defs>
+                    <rect width="400" height="220" fill="url(#pixelSky)"/>
+
+                    <!-- 像素風格雲朵 -->
+                    <g fill="#ffffff" opacity="0.22">
+                        <rect x="40" y="35" width="48" height="14" rx="2"/>
+                        <rect x="52" y="25" width="24" height="12" rx="2"/>
+                        <rect x="290" y="50" width="56" height="14" rx="2"/>
+                        <rect x="304" y="38" width="28" height="14" rx="2"/>
+                    </g>
+
+                    <!-- 遠景像素城市剪影 -->
+                    <g fill="#0f172a" opacity="0.35">
+                        <rect x="10" y="130" width="28" height="70"/>
+                        <rect x="42" y="110" width="35" height="90"/>
+                        <rect x="82" y="140" width="25" height="60"/>
+                        <rect x="240" y="120" width="34" height="80"/>
+                        <rect x="330" y="115" width="40" height="85"/>
+                    </g>
+
+                    <!-- 上方綠色水管 -->
+                    <g transform="translate(265, 0)">
+                        <rect x="6" y="0" width="44" height="58" fill="url(#pipeGrad)" stroke="#052e16" stroke-width="2.5"/>
+                        <rect x="0" y="54" width="56" height="18" rx="2" fill="url(#pipeGrad)" stroke="#052e16" stroke-width="2.5"/>
+                    </g>
+
+                    <!-- 下方綠色水管 -->
+                    <g transform="translate(265, 134)">
+                        <rect x="0" y="0" width="56" height="18" rx="2" fill="url(#pipeGrad)" stroke="#052e16" stroke-width="2.5"/>
+                        <rect x="6" y="18" width="44" height="52" fill="url(#pipeGrad)" stroke="#052e16" stroke-width="2.5"/>
+                    </g>
+
+                    <!-- 飛行軌跡虛線 -->
+                    <path d="M 75 125 Q 115 95, 150 105" fill="none" stroke="#fde047" stroke-width="3" stroke-dasharray="6 6" opacity="0.75"/>
+
+                    <!-- 精緻像素小鳥主角 -->
+                    <g transform="translate(155, 86)">
+                        <!-- 身體外框與主色 -->
+                        <rect x="4" y="4" width="36" height="28" rx="6" fill="#facc15" stroke="#422006" stroke-width="3"/>
+                        <!-- 肚子高光 -->
+                        <rect x="8" y="18" width="22" height="10" rx="3" fill="#fef08a"/>
+                        <!-- 翅膀 -->
+                        <rect x="2" y="12" width="16" height="11" rx="4" fill="#ffffff" stroke="#422006" stroke-width="2.5"/>
+                        <!-- 眼睛 -->
+                        <rect x="24" y="7" width="11" height="11" rx="3" fill="#ffffff" stroke="#422006" stroke-width="2.5"/>
+                        <rect x="30" y="10" width="4" height="5" fill="#090d16"/>
+                        <!-- 橘紅色嘴巴 -->
+                        <rect x="34" y="16" width="14" height="9" rx="3" fill="#f97316" stroke="#422006" stroke-width="2.5"/>
+                        <line x1="35" y1="20.5" x2="47" y2="20.5" stroke="#422006" stroke-width="2"/>
+                    </g>
+
+                    <!-- 底部復古草地地板 -->
+                    <rect x="0" y="196" width="400" height="24" fill="#84cc16" stroke="#1a2e05" stroke-width="2"/>
+                    <rect x="0" y="204" width="400" height="16" fill="#ca8a04"/>
+                </svg>`;
+            }
+
+            // 預設 / 敬請期待 (coming-soon) 神秘卡帶封面
+            return `
+            <svg class="cover-art-svg w-full h-full object-cover" viewBox="0 0 400 220" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="mysteryBg" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#13091f"/>
+                        <stop offset="100%" stop-color="#1e1b4b"/>
+                    </linearGradient>
+                </defs>
+                <rect width="400" height="220" fill="url(#mysteryBg)"/>
+                <!-- 裝飾性電路線條 -->
+                <g stroke="#ff007f" stroke-opacity="0.25" stroke-width="1.5" fill="none">
+                    <path d="M 0 40 L 80 40 L 105 65 L 150 65"/>
+                    <path d="M 400 180 L 310 180 L 285 155 L 240 155"/>
+                    <circle cx="150" cy="65" r="3" fill="#ff007f"/>
+                    <circle cx="240" cy="155" r="3" fill="#00f3ff"/>
+                </g>
+                <!-- 中央神秘遊戲卡帶輪廓 -->
+                <g transform="translate(152, 54)">
+                    <rect x="0" y="0" width="96" height="112" rx="10" fill="#0f172a" stroke="#ff007f" stroke-width="2" stroke-dasharray="6 4"/>
+                    <rect x="14" y="16" width="68" height="48" rx="6" fill="#1e1b4b" stroke="#00f3ff" stroke-width="1.5"/>
+                    <text x="48" y="48" text-anchor="middle" fill="#ff007f" font-family="Orbitron, sans-serif" font-weight="900" font-size="26">?</text>
+                    <rect x="22" y="78" width="52" height="6" rx="3" fill="#334155"/>
+                    <rect x="30" y="90" width="36" height="6" rx="3" fill="#334155"/>
+                </g>
+            </svg>`;
+        }
+
+        // ============================================================================
+        // 讀取 localStorage 最高分紀錄（若遊戲有存入 localStorage 則自動顯示）
+        // ============================================================================
+        function getSavedHighScore(scoreKeys) {
+            if (!scoreKeys || !Array.isArray(scoreKeys)) return null;
+            for (const key of scoreKeys) {
+                try {
+                    const val = localStorage.getItem(key);
+                    if (val !== null && val !== '' && !isNaN(Number(val)) && Number(val) > 0) {
+                        return Number(val).toLocaleString();
+                    }
+                } catch (e) {
+                    // 忽略無痕模式或權限限制錯誤
+                }
+            }
+            return null;
+        }
+
+        // ============================================================================
+        // 渲染頂部分類篩選標籤
+        // ============================================================================
+        function renderCategoryFilters() {
+            const container = document.getElementById('category-filters');
+            // 自動從 GAMES_DATA 萃取所有不重複分類（排除「敬請期待」單獨成類，保留在全部中，或依需求顯示）
+            const categories = ['全部'];
+            GAMES_DATA.forEach(game => {
+                if (game.category && !game.comingSoon && !categories.includes(game.category)) {
+                    categories.push(game.category);
+                }
+            });
+
+            container.innerHTML = categories.map(cat => {
+                const isActive = currentCategory === cat;
+                const activeClasses = isActive
+                    ? 'bg-cyan-400 text-slate-950 font-bold shadow-lg shadow-cyan-400/25 border-cyan-300'
+                    : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white border-white/10 font-medium';
+                
+                return `
+                    <button 
+                        onclick="selectCategory('${cat}')"
+                        class="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm border transition-all whitespace-nowrap ${activeClasses}"
+                    >
+                        ${cat}
+                    </button>
+                `;
+            }).join('');
+
+            // 更新頂部已上線遊戲總數徽章
+            const playableCount = GAMES_DATA.filter(g => !g.comingSoon).length;
+            const badge = document.getElementById('game-count-badge');
+            if (badge) {
+                badge.textContent = `${playableCount} 款已上線`;
+            }
+        }
+
+        // ============================================================================
+        // 渲染遊戲卡片網格
+        // ============================================================================
+        function renderGamesGrid() {
+            const grid = document.getElementById('games-grid');
+            const emptyState = document.getElementById('empty-state');
+            const visibleCountEl = document.getElementById('visible-count');
+            const sectionTitleEl = document.getElementById('section-title');
+
+            const keyword = searchQuery.trim().toLowerCase();
+
+            const filteredGames = GAMES_DATA.filter(game => {
+                // 分類過濾
+                const matchCategory = currentCategory === '全部' || game.category === currentCategory;
+                // 關鍵字過濾（搜尋標題、英文副標題、標籤、描述）
+                const matchKeyword = !keyword || 
+                    game.title.toLowerCase().includes(keyword) ||
+                    game.subtitle.toLowerCase().includes(keyword) ||
+                    game.category.toLowerCase().includes(keyword) ||
+                    game.description.toLowerCase().includes(keyword) ||
+                    (game.tags && game.tags.some(t => t.toLowerCase().includes(keyword)));
+
+                return matchCategory && matchKeyword;
+            });
+
+            sectionTitleEl.textContent = currentCategory === '全部' ? '全部遊戲庫' : `${currentCategory}專區`;
+            visibleCountEl.textContent = filteredGames.length;
+
+            if (filteredGames.length === 0) {
+                grid.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            grid.innerHTML = filteredGames.map(game => {
+                const theme = THEME_STYLES[game.themeColor] || THEME_STYLES.cyan;
+                const highScore = getSavedHighScore(game.scoreKeys);
+                const isComingSoon = Boolean(game.comingSoon);
+
+                // 最高分徽章或狀態徽章
+                const topRightBadge = isComingSoon
+                    ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-fuchsia-950/80 text-fuchsia-300 border border-fuchsia-500/40 backdrop-blur-md">
+                        <span>🔒 開發中</span>
+                       </span>`
+                    : highScore
+                        ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-950/85 text-amber-300 border border-amber-400/40 backdrop-blur-md shadow-lg">
+                            <span>🏆 最高分: ${highScore}</span>
+                           </span>`
+                        : `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-950/80 text-emerald-300 border border-emerald-400/30 backdrop-blur-md">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            <span>可遊玩</span>
+                           </span>`;
+
+                // 標籤列表
+                const tagsHtml = (game.tags || []).map(tag => 
+                    `<span class="px-2 py-0.5 rounded-md text-[11px] font-medium bg-white/5 text-slate-300 border border-white/10">#${tag}</span>`
+                ).join('');
+
+                // 底部按鈕區
+                const actionAreaHtml = isComingSoon
+                    ? `<button onclick="showComingSoonToast()" class="w-full py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${theme.btnBg}">
+                        <span>敬請期待</span>
+                       </button>`
+                    : `<div class="flex items-center gap-2">
+                        <button onclick="launchGame('${game.id}')" class="flex-grow py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${theme.btnBg}">
+                            <span>立即遊玩</span>
+                            <span class="text-xs">▶</span>
+                        </button>
+                        <a href="${game.url}" target="_blank" rel="noopener noreferrer" title="在新分頁開啟" class="p-3 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-white transition-colors shrink-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                            </svg>
+                        </a>
+                       </div>`;
+
+                return `
+                <article 
+                    class="game-card rounded-3xl overflow-hidden flex flex-col justify-between group ${isComingSoon ? 'opacity-85 hover:opacity-100' : ''}"
+                    style="--card-accent: ${theme.accent}; --card-glow: ${theme.glow};"
+                >
+                    <div>
+                        <!-- 封面圖區塊 (點擊亦可啟動) -->
+                        <div 
+                            onclick="${isComingSoon ? 'showComingSoonToast()' : `launchGame('${game.id}')`}" 
+                            class="relative h-48 sm:h-52 w-full overflow-hidden bg-slate-950 cursor-pointer border-b border-white/10"
+                        >
+                            ${getCoverSVG(game.coverType)}
+                            <!-- 復古螢幕掃描線遮罩 -->
+                            <div class="absolute inset-0 scanlines pointer-events-none opacity-40"></div>
+                            <!-- 底部漸層過渡 -->
+                            <div class="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#0f172a] to-transparent pointer-events-none"></div>
+                            
+                            <!-- 左上角分類標籤 -->
+                            <div class="absolute top-3.5 left-3.5">
+                                <span class="px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-md ${theme.badgeBg}">
+                                    ${game.category}
+                                </span>
+                            </div>
+
+                            <!-- 右上角狀態/最高分徽章 -->
+                            <div class="absolute top-3.5 right-3.5">
+                                ${topRightBadge}
+                            </div>
+                        </div>
+
+                        <!-- 卡片文字內容區 -->
+                        <div class="p-5 sm:p-6 pb-4">
+                            <div class="mb-2">
+                                <p class="font-display text-[11px] font-bold tracking-widest uppercase ${theme.subtitleText} mb-0.5">
+                                    ${game.subtitle}
+                                </p>
+                                <h3 
+                                    onclick="${isComingSoon ? 'showComingSoonToast()' : `launchGame('${game.id}')`}"
+                                    class="text-xl font-black text-white group-hover:text-cyan-300 transition-colors cursor-pointer"
+                                >
+                                    ${game.title}
+                                </h3>
+                            </div>
+
+                            <p class="text-slate-400 text-xs sm:text-sm leading-relaxed mb-4 line-clamp-3">
+                                ${game.description}
+                            </p>
+
+                            <!-- 標籤列 -->
+                            <div class="flex flex-wrap gap-1.5 mb-2">
+                                ${tagsHtml}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 卡片底部操作區 -->
+                    <div class="px-5 sm:px-6 pb-5 sm:pb-6 pt-2">
+                        <div class="flex items-center gap-1.5 text-[11px] text-slate-400 mb-3">
+                            <svg class="w-3.5 h-3.5 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path>
+                            </svg>
+                            <span class="truncate">${game.controlHint}</span>
+                        </div>
+                        ${actionAreaHtml}
+                    </div>
+                </article>
+                `;
+            }).join('');
+        }
+
+        // ============================================================================
+        // 互動與控制邏輯
+        // ============================================================================
+        function selectCategory(category) {
+            currentCategory = category;
+            renderCategoryFilters();
+            renderGamesGrid();
+        }
+
+        function clearSearch() {
+            const input = document.getElementById('search-input');
+            input.value = '';
+            searchQuery = '';
+            document.getElementById('clear-search-btn').classList.add('hidden');
+            renderGamesGrid();
+        }
+
+        function resetFilters(e) {
+            if (e) e.preventDefault();
+            currentCategory = '全部';
+            clearSearch();
+            renderCategoryFilters();
+            renderGamesGrid();
+        }
+
+        function setLaunchMode(mode) {
+            launchMode = mode;
+            const modalBtn = document.getElementById('mode-modal-btn');
+            const tabBtn = document.getElementById('mode-tab-btn');
+
+            if (mode === 'modal') {
+                modalBtn.className = 'px-3 py-1.5 rounded-lg font-medium transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-sm';
+                tabBtn.className = 'px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white border border-transparent';
+            } else {
+                tabBtn.className = 'px-3 py-1.5 rounded-lg font-medium transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-sm';
+                modalBtn.className = 'px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white border border-transparent';
+            }
+        }
+
+        // 啟動遊戲（支援大廳視窗內嵌遊玩 or 直接跳轉開啟）
+        function launchGame(gameId) {
+            const game = GAMES_DATA.find(g => g.id === gameId);
+            if (!game || !game.url) {
+                showComingSoonToast();
+                return;
+            }
+
+            // 若使用者切換為「直接跳轉開啟」模式
+            if (launchMode === 'tab') {
+                window.location.href = game.url;
+                return;
+            }
+
+            // 預設為「大廳視窗內嵌玩 (Modal Iframe)」
+            const modal = document.getElementById('game-modal');
+            const iframe = document.getElementById('game-iframe');
+            const loader = document.getElementById('iframe-loader');
+            const titleEl = document.getElementById('modal-game-title');
+            const subtitleEl = document.getElementById('modal-game-subtitle');
+            const extLink = document.getElementById('modal-external-link');
+
+            titleEl.textContent = game.title;
+            subtitleEl.textContent = game.subtitle;
+            extLink.href = game.url;
+
+            loader.classList.remove('opacity-0');
+            iframe.onload = () => {
+                loader.classList.add('opacity-0');
+                // 自動將焦點交給 iframe，方便玩家直接用鍵盤空白鍵或方向鍵操控
+                try { iframe.contentWindow.focus(); } catch (e) {}
+            };
+
+            iframe.src = game.url;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeGameModal() {
+            const modal = document.getElementById('game-modal');
+            const iframe = document.getElementById('game-iframe');
+
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
+
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            iframe.src = 'about:blank'; // 釋放遊戲音效與記憶體
+            document.body.style.overflow = '';
+
+            // 關閉遊戲後重新渲染卡片，若玩家剛破紀錄可即時更新最高分徽章
+            renderGamesGrid();
+        }
+
+        function reloadGameIframe() {
+            const iframe = document.getElementById('game-iframe');
+            const loader = document.getElementById('iframe-loader');
+            if (iframe.src && iframe.src !== 'about:blank') {
+                loader.classList.remove('opacity-0');
+                const currentSrc = iframe.src;
+                iframe.src = 'about:blank';
+                setTimeout(() => {
+                    iframe.src = currentSrc;
+                }, 80);
+            }
+        }
+
+        function toggleModalFullscreen() {
+            const modal = document.getElementById('game-modal');
+            if (!document.fullscreenElement) {
+                modal.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen().catch(() => {});
+            }
+        }
+
+        // 顯示「敬請期待」提示 Toast
+        let toastTimer = null;
+        function showComingSoonToast() {
+            const toast = document.getElementById('toast-box');
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.classList.add('translate-y-24', 'opacity-0');
+            }, 3000);
+        }
+
+        // 監聽 ESC 鍵快速關閉內嵌遊戲視窗
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('game-modal');
+                if (!modal.classList.contains('hidden')) {
+                    closeGameModal();
+                }
+            }
+        });
+
+        // 搜尋框即時過濾監聽
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            searchQuery = e.target.value;
+            const clearBtn = document.getElementById('clear-search-btn');
+            if (searchQuery.length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+            renderGamesGrid();
+        });
+
+        // ============================================================================
+        // 背景微光霓虹粒子特效 (Lightweight Canvas Particles)
+        // ============================================================================
+        function initParticleBackground() {
+            const canvas = document.getElementById('particle-canvas');
+            const ctx = canvas.getContext('2d');
+            let width, height, particles;
+
+            const colors = ['#00f3ff', '#ff007f', '#9d4edd', '#38bdf8'];
+
+            function resize() {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            }
+
+            function createParticles() {
+                const count = Math.min(45, Math.floor((width * height) / 28000));
+                particles = Array.from({ length: count }, () => ({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    r: Math.random() * 1.8 + 0.6,
+                    vx: (Math.random() - 0.5) * 0.35,
+                    vy: -Math.random() * 0.4 - 0.15,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    alpha: Math.random() * 0.6 + 0.2
+                }));
+            }
+
+            function animate() {
+                ctx.clearRect(0, 0, width, height);
+                for (const p of particles) {
+                    p.x += p.vx;
+                    p.y += p.vy;
+
+                    if (p.y < -10) {
+                        p.y = height + 10;
+                        p.x = Math.random() * width;
+                    }
+                    if (p.x < -10) p.x = width + 10;
+                    if (p.x > width + 10) p.x = -10;
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.alpha;
+                    ctx.fill();
+                }
+                ctx.globalAlpha = 1;
+                requestAnimationFrame(animate);
+            }
+
+            window.addEventListener('resize', () => {
+                resize();
+                createParticles();
+            });
+
+            resize();
+            createParticles();
+            animate();
+        }
+
+        // 頁面載入完成後初始化
+        window.addEventListener('DOMContentLoaded', () => {
+            renderCategoryFilters();
+            renderGamesGrid();
+            initParticleBackground();
+        });
+    </script>
+</body>
+</html>

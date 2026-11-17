@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>像素飛鳥 | FREEPY BIRD</title>
+    <!-- 引入復古像素英文字體與繁體中文字體 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@700;900&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* 全域樣式與防止手機誤觸縮放/滾動 */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1a1c2c;
+            font-family: 'Press Start 2P', 'Noto Sans TC', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 遊戲主容器：在桌機版維持街機比例並置中，手機版滿版 */
+        #game-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 520px;
+            max-height: 860px;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.75);
+            overflow: hidden;
+            background: #4ec0ca;
+        }
+
+        @media (max-width: 520px) {
+            #game-wrapper {
+                max-width: 100%;
+                max-height: 100%;
+                box-shadow: none;
+            }
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+        }
+
+        /* 頂部即時分數顯示 */
+        #live-score {
+            position: absolute;
+            top: 8%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Press Start 2P', monospace;
+            font-size: clamp(2.2rem, 7vw, 3.2rem);
+            color: #ffffff;
+            text-shadow: 
+                -3px -3px 0 #000,  
+                 3px -3px 0 #000,
+                -3px  3px 0 #000,
+                 3px  3px 0 #000,
+                 0px  5px 0 #000;
+            z-index: 10;
+            pointer-events: none;
+            transition: transform 0.1s ease;
+        }
+
+        #live-score.pop {
+            transform: translateX(-50%) scale(1.22);
+        }
+
+        /* 右上角音效開關按鈕 */
+        #sound-toggle {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            z-index: 25;
+            background: #f8e71c;
+            border: 3px solid #222034;
+            box-shadow: 0 4px 0 #222034;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-family: 'Noto Sans TC', sans-serif;
+            font-weight: 900;
+            font-size: 0.85rem;
+            color: #222034;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        #sound-toggle:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 #222034;
+        }
+
+        #sound-toggle.muted {
+            background: #9badb7;
+            color: #3f3f74;
+        }
+
+        /* 開始畫面覆蓋層 */
+        #start-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14% 20px 22%;
+            z-index: 15;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        #start-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .title-group {
+            text-align: center;
+        }
+
+        .main-title {
+            font-family: 'Noto Sans TC', sans-serif;
+            font-weight: 900;
+            font-size: clamp(2.4rem, 8vw, 3.3rem);
+            color: #f8e71c;
+            letter-spacing: 3px;
+            text-shadow: 
+                -3px -3px 0 #222034,  
+                 3px -3px 0 #222034,
+                -3px  3px 0 #222034,
+                 3px  3px 0 #222034,
+                 0px  6px 0 #222034;
+            margin-bottom: 8px;
+        }
+
+        .sub-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: clamp(0.85rem, 3vw, 1.1rem);
+            color: #ffffff;
+            text-shadow: 2px 2px 0 #222034;
+            letter-spacing: 2px;
+        }
+
+        .prompt-box {
+            background: rgba(34, 32, 52, 0.85);
+            border: 3px solid #ffffff;
+            box-shadow: 0 5px 0 #222034;
+            border-radius: 12px;
+            padding: 14px 22px;
+            text-align: center;
+            animation: floatPrompt 1.4s ease-in-out infinite;
+        }
+
+        .prompt-text {
+            font-family: 'Noto Sans TC', sans-serif;
+            font-weight: 900;
+            font-size: clamp(1rem, 3.8vw, 1.2rem);
+            color: #ffffff;
+            letter-spacing: 1px;
+        }
+
+        .prompt-sub {
+            font-family: 'Noto Sans TC', sans-serif;
+            font-size: 0.78rem;
+            color: #f8e71c;
+            margin-top: 6px;
+        }
+
+        /* 遊戲結束結算面板 */
+        #gameover-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(20, 18, 36, 0.55);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            z-index: 20;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease;
+        }
+
+        #gameover-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .gameover-banner {
+            font-family: 'Noto Sans TC', sans-serif;
+            font-weight: 900;
+            font-size: clamp(2.1rem, 7vw, 2.8rem);
+            color: #ff595e;
+            text-shadow: 
+                -3px -3px 0 #222034,  
+                 3px -3px 0 #222034,
+                -3px  3px 0 #222034,
+                 3px  3px 0 #222034,
+                 0px  5px 0 #222034;
+            margin-bottom: 18px;
+            letter-spacing: 2px;
+        }
+
+        /* 復古木質/羊皮紙計分板 */
+        .scoreboard-card {
+            background: #ded895;
+            border: 4px solid #543847;
+            box-shadow: 
+                inset 0 0 0 4px #f7f3c6,
+                0 8px 0 #222034;
+            border-radius: 14px;
+            width: 100%;
+            max-width: 340px;
+            padding: 22px 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        .medal-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-right: 3px dashed #b5ae6d;
+            padding-right: 12px;
+        }
+
+        .medal-label {
+            font-family: 'Noto Sans TC', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 900;
+            color: #8c7a3e;
+            margin-bottom: 10px;
+        }
+
+        .medal-slot {
+            width: 68px;
+            height: 68px;
+            border-radius: 50%;
+            background: #c5be7c;
+            border: 3px solid #9e9656;
+            box-shadow: inset 0 4px 6px rgba(0,0,0,0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            position: relative;
+        }
+
+        /* 獎牌等級色彩 */
+        .medal-slot.bronze {
+            background: radial-gradient(circle at 30% 30%, #f4a460, #cd7f32 60%, #8b4513);
+            border-color: #5c2d0c;
+            box-shadow: 0 4px 0 #5c2d0c, inset 0 2px 4px rgba(255,255,255,0.6);
+        }
+        .medal-slot.silver {
+            background: radial-gradient(circle at 30% 30%, #ffffff, #c0c0c0 60%, #7f8c8d);
+            border-color: #4a5354;
+            box-shadow: 0 4px 0 #4a5354, inset 0 2px 4px rgba(255,255,255,0.8);
+        }
+        .medal-slot.gold {
+            background: radial-gradient(circle at 30% 30%, #fff799, #ffd700 60%, #d49b00);
+            border-color: #7a5800;
+            box-shadow: 0 4px 0 #7a5800, inset 0 2px 4px rgba(255,255,255,0.9);
+        }
+        .medal-slot.platinum {
+            background: radial-gradient(circle at 30% 30%, #ffffff, #7ef9ff 55%, #00b4d8);
+            border-color: #005f73;
+            box-shadow: 0 0 15px rgba(126, 249, 255, 0.8), 0 4px 0 #005f73;
+        }
+
+        .medal-name {
+            font-family: 'Noto Sans TC', sans-serif;
+            font-size: 0.78rem;
+            font-weight: 900;
+            color: #543847;
+            margin-top: 8px;
+        }
+
+        .scores-section {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-left: 6px;
+        }
+
+        .score-row {
+            text-align: right;
+            width: 100%;
+        }
+
+        .score-row-label {
+            font-family: 'Noto Sans TC', sans-serif;
+            font-size: 0.82rem;
+            font-weight: 900;
+            color: #8c7a3e;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .new-badge {
+            background: #ff595e;
+            color: #ffffff;
+            font-size: 0.65rem;
+            padding: 2px 5px;
+            border-radius: 4px;
+            border: 1px solid #222034;
+            display: none;
+        }
+
+        .new-badge.show {
+            display: inline-block;
+        }
+
+        .score-row-val {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 1.35rem;
+            color: #ffffff;
+            text-shadow: 
+                -2px -2px 0 #543847,  
+                 2px -2px 0 #543847,
+                -2px  2px 0 #543847,
+                 2px  2px 0 #543847;
+        }
+
+        /* 街機重新開始按鈕 */
+        #restart-btn {
+            background: linear-gradient(180deg, #8ac926 0%, #6a994e 100%);
+            border: 4px solid #222034;
+            box-shadow: 
+                inset 0 3px 0 rgba(255,255,255,0.45),
+                0 6px 0 #222034;
+            border-radius: 12px;
+            padding: 14px 36px;
+            font-family: 'Noto Sans TC', sans-serif;
+            font-weight: 900;
+            font-size: 1.3rem;
+            color: #ffffff;
+            text-shadow: 2px 2px 0 #222034;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        #restart-btn:hover {
+            filter: brightness(1.06);
+        }
+
+        #restart-btn:active {
+            transform: translateY(4px);
+            box-shadow: 
+                inset 0 3px 0 rgba(255,255,255,0.45),
+                0 2px 0 #222034;
+        }
+
+        @keyframes floatPrompt {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-7px); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <!-- 主遊戲畫布 -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 頂部即時分數 -->
+    <div id="live-score">0</div>
+
+    <!-- 右上角音效切換按鈕 -->
+    <button id="sound-toggle" type="button" aria-label="切換音效">🔊 音效: 開</button>
+
+    <!-- 開始畫面 -->
+    <div id="start-overlay">
+        <div class="title-group">
+            <h1 class="main-title">像素飛鳥</h1>
+            <div class="sub-title">FREEPY BIRD</div>
+        </div>
+
+        <div class="prompt-box">
+            <div class="prompt-text">點擊 / 空白鍵 開始飛行</div>
+            <div class="prompt-sub">穿越水管障礙，挑戰最高紀錄！</div>
+        </div>
+    </div>
+
+    <!-- 遊戲結束結算畫面 -->
+    <div id="gameover-overlay">
+        <div class="gameover-banner">遊戲結束</div>
+
+        <div class="scoreboard-card">
+            <!-- 左側獎牌區 -->
+            <div class="medal-section">
+                <div class="medal-label">獲得獎牌</div>
+                <div class="medal-slot" id="medal-slot"></div>
+                <div class="medal-name" id="medal-name">尚無獎牌</div>
+            </div>
+
+            <!-- 右側分數區 -->
+            <div class="scores-section">
+                <div class="score-row">
+                    <div class="score-row-label">本次分數</div>
+                    <div class="score-row-val" id="final-score">0</div>
+                </div>
+                <div class="score-row" style="margin-top: 14px;">
+                    <div class="score-row-label">
+                        <span class="new-badge" id="new-best-badge">新紀錄!</span>
+                        <span>最高紀錄</span>
+                    </div>
+                    <div class="score-row-val" id="best-score" style="color: #f8e71c;">0</div>
+                </div>
+            </div>
+        </div>
+
+        <button id="restart-btn" type="button">重新開始</button>
+    </div>
+</div>
+
+<script>
+/**
+ * ============================================================================
+ * Web Audio API 復古 8-Bit 音效合成器
+ * 完全程式化生成（無需外部音效檔案），完美相容 GitHub Pages 靜態託管
+ * ============================================================================
+ */
+class RetroAudio {
+    constructor() {
+        this.ctx = null;
+        this.muted = false;
+    }
+
+    init() {
+        if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioCtx();
+        }
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    }
+
+    toggleMute() {
+        this.muted = !this.muted;
+        return this.muted;
+    }
+
+    // 拍動翅膀音效（輕快上揚滑音）
+    playFlap() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.exponentialRampToValueAtTime(580, now + 0.09);
+
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.09);
+    }
+
+    // 通過水管得分音效（經典雙音叮咚）
+    playScore() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+
+        const playTone = (freq, startTime, dur) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(freq, startTime);
+
+            gain.gain.setValueAtTime(0.11, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(startTime);
+            osc.stop(startTime + dur);
+        };
+
+        playTone(987.77, now, 0.08);         // B5
+        playTone(1318.51, now + 0.07, 0.22); // E6
+    }
+
+    // 撞擊碰撞音效（低頻衝擊 + 雜訊）
+    playCrash() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+
+        // 低頻撞擊波
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.exponentialRampToValueAtTime(38, now + 0.25);
+
+        gain.gain.setValueAtTime(0.28, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+    }
+
+    // 獲得獎牌慶祝旋律
+    playMedalFanfare() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5 E5 G5 C6
+        notes.forEach((freq, i) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + i * 0.08);
+
+            gain.gain.setValueAtTime(0.15, now + i * 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.25);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + i * 0.08);
+            osc.stop(now + i * 0.08 + 0.25);
+        });
+    }
+}
+
+/**
+ * ============================================================================
+ * 遊戲核心設定與狀態管理
+ * ============================================================================
+ */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const audio = new RetroAudio();
+
+// DOM 元素參照
+const liveScoreEl = document.getElementById('live-score');
+const soundToggleBtn = document.getElementById('sound-toggle');
+const startOverlay = document.getElementById('start-overlay');
+const gameoverOverlay = document.getElementById('gameover-overlay');
+const finalScoreEl = document.getElementById('final-score');
+const bestScoreEl = document.getElementById('best-score');
+const newBestBadge = document.getElementById('new-best-badge');
+const medalSlotEl = document.getElementById('medal-slot');
+const medalNameEl = document.getElementById('medal-name');
+const restartBtn = document.getElementById('restart-btn');
+
+// 畫布邏輯尺寸（自適應容器大小）
+let W = 400;
+let H = 700;
+let groundHeight = 110;
+
+// 遊戲狀態：'START' | 'PLAYING' | 'GAMEOVER'
+let gameState = 'START';
+let score = 0;
+let bestScore = parseInt(localStorage.getItem('freepy_bird_best_score')) || 0;
+let lastTime = 0;
+let globalTime = 0;
+let screenFlash = 0;
+let shakeTimer = 0;
+
+// 物理參數（以每秒為基準，確保 60Hz/120Hz 螢幕速度一致）
+const PHYSICS = {
+    gravity: 1580,       // 重力加速度 (px/s²)
+    flapImpulse: -475,   // 向上拍翅初速度 (px/s)
+    maxFallSpeed: 680,   // 最大下墜終端速度
+    baseScrollSpeed: 185 // 水管與地面基礎捲動速度 (px/s)
+};
+
+// 視差背景元素
+let clouds = [];
+let buildings = [];
+let bushes = [];
+let groundOffset = 0;
+
+// 遊戲實體
+let bird = null;
+let pipes = [];
+let particles = [];
+let pipeSpawnTimer = 0;
+
+/**
+ * ============================================================================
+ * 畫布自適應與視差環境初始化
+ * ============================================================================
+ */
+function resizeCanvas() {
+    const wrapper = document.getElementById('game-wrapper');
+    W = canvas.width = wrapper.clientWidth;
+    H = canvas.height = wrapper.clientHeight;
+    groundHeight = Math.max(90, Math.round(H * 0.15));
+
+    initScenery();
+
+    if (bird) {
+        bird.x = Math.round(W * 0.28);
+        if (gameState === 'START') {
+            bird.baseY = Math.round((H - groundHeight) * 0.46);
+            bird.y = bird.baseY;
+        }
+    }
+}
+
+function initScenery() {
+    // 初始化遠景雲朵
+    clouds = [];
+    const cloudCount = Math.ceil(W / 130) + 2;
+    for (let i = 0; i < cloudCount; i++) {
+        clouds.push({
+            x: i * 150 + Math.random() * 40,
+            y: H * (0.14 + Math.random() * 0.26),
+            scale: 0.75 + Math.random() * 0.55,
+            speed: 18 + Math.random() * 12
+        });
+    }
+
+    // 初始化復古像素城市剪影
+    buildings = [];
+    let bx = 0;
+    while (bx < W + 120) {
+        const bw = 38 + Math.floor(Math.random() * 28);
+        const bh = 65 + Math.floor(Math.random() * 95);
+        buildings.push({
+            x: bx,
+            w: bw,
+            h: bh,
+            windows: Math.floor(bh / 18)
+        });
+        bx += bw - 4;
+    }
+
+    // 初始化近景草叢
+    bushes = [];
+    let bushX = 0;
+    while (bushX < W + 100) {
+        const r = 22 + Math.random() * 16;
+        bushes.push({ x: bushX, r });
+        bushX += r * 1.4;
+    }
+}
+
+/**
+ * ============================================================================
+ * 飛鳥主角類別
+ * ============================================================================
+ */
+class Bird {
+    constructor() {
+        this.x = Math.round(W * 0.28);
+        this.baseY = Math.round((H - groundHeight) * 0.46);
+        this.y = this.baseY;
+        this.vy = 0;
+        this.radius = 16;
+        this.rotation = 0;
+        this.wingTimer = 0;
+        this.wingFrame = 0;
+    }
+
+    flap() {
+        this.vy = PHYSICS.flapImpulse;
+        this.wingTimer = 0.28; // 觸發快速拍翅動畫
+        audio.playFlap();
+        spawnFeatherParticles(this.x - 8, this.y + 4);
+    }
+
+    update(dt) {
+        // 翅膀扇動動畫更新
+        if (this.wingTimer > 0) {
+            this.wingTimer -= dt;
+            this.wingFrame = Math.floor((globalTime * 24) % 3);
+        } else if (gameState === 'START') {
+            this.wingFrame = Math.floor((globalTime * 8) % 3);
+        } else {
+            this.wingFrame = 1; // 滑翔姿勢
+        }
+
+        if (gameState === 'START') {
+            // 待機畫面上下漂浮
+            this.y = this.baseY + Math.sin(globalTime * 5) * 9;
+            this.rotation = 0;
+            return;
+        }
+
+        // 重力與速度積分
+        this.vy += PHYSICS.gravity * dt;
+        if (this.vy > PHYSICS.maxFallSpeed) {
+            this.vy = PHYSICS.maxFallSpeed;
+        }
+        this.y += this.vy * dt;
+
+        // 防止飛出畫面頂端
+        if (this.y < this.radius + 8) {
+            this.y = this.radius + 8;
+            this.vy = 0;
+        }
+
+        // 根據垂直速度平滑計算機身仰角/俯衝角度
+        if (this.vy < 0) {
+            // 向上抬頭 (-26度)
+            const targetRot = -0.46;
+            this.rotation += (targetRot - this.rotation) * Math.min(1, dt * 18);
+        } else {
+            // 向下俯衝 (最多 +85度)
+            const fallProgress = Math.min(1, Math.max(0, (this.vy - 120) / 480));
+            const targetRot = -0.46 + fallProgress * (Math.PI * 0.48 + 0.46);
+            this.rotation += (targetRot - this.rotation) * Math.min(1, dt * 10);
+        }
+
+        // 撞擊地面判定
+        const floorY = H - groundHeight - this.radius;
+        if (this.y >= floorY) {
+            this.y = floorY;
+            if (gameState === 'PLAYING') {
+                triggerGameOver();
+            }
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+
+        // 1. 尾羽
+        ctx.fillStyle = '#e67e22';
+        ctx.strokeStyle = '#222034';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(-14, -2);
+        ctx.lineTo(-22, -7);
+        ctx.lineTo(-20, 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // 2. 身體主體（亮黃色復古像素圓潤造型）
+        ctx.fillStyle = '#f8e71c';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 18, 14.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // 3. 腹部高光與陰影層次
+        ctx.fillStyle = '#fff59d';
+        ctx.beginPath();
+        ctx.ellipse(-2, -6, 11, 4.5, -0.15, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#f39c12';
+        ctx.beginPath();
+        ctx.ellipse(0, 8, 13, 4.5, 0, 0, Math.PI);
+        ctx.fill();
+
+        // 4. 大眼睛（眼白 + 黑瞳孔 + 眼神光）
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(7, -4, 6.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#222034';
+        ctx.beginPath();
+        ctx.arc(9.2, -4, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(8.2, -5.2, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 5. 雙層橘紅色鳥喙
+        ctx.fillStyle = '#ff595e';
+        ctx.beginPath();
+        ctx.roundRect(10, 0, 12, 5.5, 2.5);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#d9383a';
+        ctx.beginPath();
+        ctx.roundRect(10, 5, 10, 4.5, 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // 6. 動態翅膀（上揚、水平、下壓三種狀態）
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        if (this.wingFrame === 0) {
+            ctx.ellipse(-3, -4, 9, 5.5, -0.35, 0, Math.PI * 2);
+        } else if (this.wingFrame === 1) {
+            ctx.ellipse(-3, 1, 9.5, 5.5, 0, 0, Math.PI * 2);
+        } else {
+            ctx.ellipse(-3, 5, 9, 5.5, 0.35, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
+    }
+}
+
+/**
+ * ============================================================================
+ * 經典金屬綠水管障礙物類別
+ * 隨分數提升動態調整間隙與加入輕微上下浮動機制
+ * ============================================================================
+ */
+class PipePair {
+    constructor(currentScore) {
+        this.width = 66;
+        this.x = W + 40;
+        this.passed = false;
+
+        // 隨分數提高難度：間隙從 152px 逐步縮小至最低 118px
+        const difficultyFactor = Math.min(1, currentScore / 45);
+        this.gap = Math.round(152 - difficultyFactor * 34);
+
+        const minTop = 75;
+        const maxTop = H - groundHeight - this.gap - 75;
+        this.baseTopHeight = minTop + Math.random() * Math.max(40, maxTop - minTop);
+        this.topHeight = this.baseTopHeight;
+
+        // 分數 >= 10 後，部分水管會帶有緩慢上下浮動效果
+        this.isMoving = currentScore >= 10 && Math.random() < Math.min(0.65, 0.25 + (currentScore - 10) * 0.015);
+        this.movePhase = Math.random() * Math.PI * 2;
+        this.moveRange = 22 + Math.random() * 18;
+        this.moveSpeed = 2.0 + Math.random() * 1.1;
+    }
+
+    update(dt, scrollSpeed) {
+        this.x -= scrollSpeed * dt;
+
+        if (this.isMoving) {
+            this.movePhase += this.moveSpeed * dt;
+            const minTop = 65;
+            const maxTop = H - groundHeight - this.gap - 65;
+            const rawTop = this.baseTopHeight + Math.sin(this.movePhase) * this.moveRange;
+            this.topHeight = Math.max(minTop, Math.min(maxTop, rawTop));
+        }
+    }
+
+    // 繪製單根具有像素立體光澤與陰影的綠水管
+    drawSinglePipe(x, y, w, h, isTop) {
+        if (h <= 0) return;
+
+        const capHeight = 28;
+        const capOverhang = 5;
+
+        ctx.save();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#222034';
+
+        // 管身漸層色彩（模擬經典街機金屬高光與深綠陰影）
+        const bodyGrad = ctx.createLinearGradient(x, 0, x + w, 0);
+        bodyGrad.addColorStop(0.0, '#558b2f');
+        bodyGrad.addColorStop(0.18, '#9ccc65');
+        bodyGrad.addColorStop(0.32, '#dcedc8'); // 明亮高光條
+        bodyGrad.addColorStop(0.55, '#7cb342');
+        bodyGrad.addColorStop(0.85, '#558b2f');
+        bodyGrad.addColorStop(1.0, '#33691e');
+
+        // 繪製管身
+        ctx.fillStyle = bodyGrad;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeRect(x, y, w, h);
+
+        // 管口加寬邊框（管帽）
+        const capX = x - capOverhang;
+        const capW = w + capOverhang * 2;
+        const capY = isTop ? (y + h - capHeight) : y;
+
+        const capGrad = ctx.createLinearGradient(capX, 0, capX + capW, 0);
+        capGrad.addColorStop(0.0, '#558b2f');
+        capGrad.addColorStop(0.18, '#aed581');
+        capGrad.addColorStop(0.32, '#f1f8e9');
+        capGrad.addColorStop(0.55, '#8bc34a');
+        capGrad.addColorStop(0.85, '#558b2f');
+        capGrad.addColorStop(1.0, '#33691e');
+
+        ctx.fillStyle = capGrad;
+        ctx.fillRect(capX, capY, capW, capHeight);
+        ctx.strokeRect(capX, capY, capW, capHeight);
+
+        // 管帽內側細節陰影線
+        ctx.fillStyle = 'rgba(34, 32, 52, 0.22)';
+        if (isTop) {
+            ctx.fillRect(x + 2, capY - 4, w - 4, 4);
+        } else {
+            ctx.fillRect(x + 2, capY + capHeight, w - 4, 4);
+        }
+
+        ctx.restore();
+    }
+
+    draw() {
+        const bottomY = this.topHeight + this.gap;
+        const bottomHeight = H - groundHeight - bottomY;
+
+        // 上方倒掛水管
+        this.drawSinglePipe(this.x, 0, this.width, this.topHeight, true);
+        // 下方立起水管
+        this.drawSinglePipe(this.x, bottomY, this.width, bottomHeight, false);
+    }
+
+    // 精準圓形與矩形碰撞檢測（略微寬容 3px 提升手感公平性）
+    checkCollision(b) {
+        const r = b.radius - 3;
+        const pipeLeft = this.x - 3;
+        const pipeRight = this.x + this.width + 3;
+
+        if (b.x + r > pipeLeft && b.x - r < pipeRight) {
+            const bottomY = this.topHeight + this.gap;
+            if (b.y - r < this.topHeight || b.y + r > bottomY) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
+/**
+ * ============================================================================
+ * 羽毛與星光粒子特效
+ * ============================================================================
+ */
+function spawnFeatherParticles(x, y) {
+    for (let i = 0; i < 6; i++) {
+        particles.push({
+            x,
+            y,
+            vx: -40 - Math.random() * 80,
+            vy: (Math.random() - 0.3) * 110,
+            size: 3 + Math.random() * 3,
+            life: 0.35 + Math.random() * 0.25,
+            maxLife: 0.6,
+            color: i % 2 === 0 ? '#ffffff' : '#fff59d'
+        });
+    }
+}
+
+function spawnScoreSparkles(x, y) {
+    for (let i = 0; i < 10; i++) {
+        const angle = (Math.PI * 2 * i) / 10;
+        const speed = 70 + Math.random() * 60;
+        particles.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: 3.5,
+            life: 0.4,
+            maxLife: 0.4,
+            color: '#f8e71c'
+        });
+    }
+}
+
+/**
+ * ============================================================================
+ * 遊戲流程控制（重置、開始、結束與獎牌評定）
+ * ============================================================================
+ */
+function resetToStart() {
+    gameState = 'START';
+    score = 0;
+    pipes = [];
+    particles = [];
+    pipeSpawnTimer = 0;
+    screenFlash = 0;
+    shakeTimer = 0;
+
+    bird = new Bird();
+
+    liveScoreEl.textContent = '0';
+    liveScoreEl.style.display = 'none';
+    startOverlay.classList.remove('hidden');
+    gameoverOverlay.classList.remove('visible');
+}
+
+function startGame() {
+    audio.init();
+    gameState = 'PLAYING';
+    score = 0;
+    pipes = [];
+    particles = [];
+    pipeSpawnTimer = 0.6; // 第一根水管稍快出現
+
+    liveScoreEl.textContent = '0';
+    liveScoreEl.style.display = 'block';
+    startOverlay.classList.add('hidden');
+    gameoverOverlay.classList.remove('visible');
+
+    bird.flap();
+}
+
+function triggerGameOver() {
+    if (gameState === 'GAMEOVER') return;
+    gameState = 'GAMEOVER';
+    audio.playCrash();
+
+    screenFlash = 0.75;
+    shakeTimer = 0.28;
+
+    // 檢查並儲存最高紀錄
+    let isNewRecord = false;
+    if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem('freepy_bird_best_score', bestScore);
+        isNewRecord = true;
+    }
+
+    // 更新結算 UI
+    liveScoreEl.style.display = 'none';
+    finalScoreEl.textContent = score;
+    bestScoreEl.textContent = bestScore;
+    newBestBadge.classList.toggle('show', isNewRecord && score > 0);
+
+    // 評定獎牌等級
+    const medalInfo = evaluateMedal(score);
+    medalSlotEl.className = 'medal-slot ' + medalInfo.tier;
+    medalSlotEl.textContent = medalInfo.icon;
+    medalNameEl.textContent = medalInfo.label;
+
+    if (medalInfo.tier !== '') {
+        setTimeout(() => audio.playMedalFanfare(), 320);
+    }
+
+    setTimeout(() => {
+        gameoverOverlay.classList.add('visible');
+    }, 380);
+}
+
+function evaluateMedal(pts) {
+    if (pts >= 40) return { tier: 'platinum', icon: '💎', label: '白金傳奇' };
+    if (pts >= 25) return { tier: 'gold', icon: '🥇', label: '黃金飛鳥' };
+    if (pts >= 15) return { tier: 'silver', icon: '🥈', label: '白銀好手' };
+    if (pts >= 5)  return { tier: 'bronze', icon: '🥉', label: '青銅新秀' };
+    return { tier: '', icon: '—', label: '繼續加油' };
+}
+
+/**
+ * ============================================================================
+ * 主更新與繪圖迴圈
+ * ============================================================================
+ */
+function update(dt) {
+    globalTime += dt;
+
+    if (screenFlash > 0) screenFlash = Math.max(0, screenFlash - dt * 2.5);
+    if (shakeTimer > 0) shakeTimer = Math.max(0, shakeTimer - dt);
+
+    // 計算當前捲動速度（隨分數略微加速，增加刺激感）
+    const speedBonus = Math.min(65, score * 1.4);
+    const currentScrollSpeed = (gameState === 'GAMEOVER') ? 0 : (PHYSICS.baseScrollSpeed + speedBonus);
+
+    // 雲朵永遠緩慢飄動
+    clouds.forEach(c => {
+        c.x -= c.speed * dt;
+        if (c.x < -120) {
+            c.x = W + 80;
+            c.y = H * (0.14 + Math.random() * 0.26);
+        }
+    });
+
+    // 地面與城市視差滾動
+    if (gameState !== 'GAMEOVER') {
+        groundOffset = (groundOffset + currentScrollSpeed * dt) % 32;
+
+        buildings.forEach(b => {
+            b.x -= currentScrollSpeed * 0.22 * dt;
+            if (b.x + b.w < 0) {
+                const maxRight = Math.max(...buildings.map(item => item.x + item.w));
+                b.x = maxRight - 4;
+            }
+        });
+
+        bushes.forEach(bush => {
+            bush.x -= currentScrollSpeed * 0.55 * dt;
+            if (bush.x + bush.r < 0) {
+                const maxRight = Math.max(...bushes.map(item => item.x));
+                bush.x = maxRight + bush.r * 1.4;
+            }
+        });
+    }
+
+    // 更新飛鳥
+    if (bird) {
+        bird.update(dt);
+    }
+
+    // 更新粒子
+    particles.forEach(p => {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt;
+    });
+    particles = particles.filter(p => p.life > 0);
+
+    // 遊戲進行中：生成水管與檢測得分/碰撞
+    if (gameState === 'PLAYING') {
+        pipeSpawnTimer -= dt;
+        const spawnInterval = Math.max(1.38, 1.85 - score * 0.01);
+        if (pipeSpawnTimer <= 0) {
+            pipes.push(new PipePair(score));
+            pipeSpawnTimer = spawnInterval;
+        }
+
+        pipes.forEach(pipe => {
+            pipe.update(dt, currentScrollSpeed);
+
+            // 碰撞檢測
+            if (pipe.checkCollision(bird)) {
+                triggerGameOver();
+            }
+
+            // 通過水管計分
+            if (!pipe.passed && pipe.x + pipe.width < bird.x) {
+                pipe.passed = true;
+                score++;
+                liveScoreEl.textContent = score;
+                liveScoreEl.classList.add('pop');
+                setTimeout(() => liveScoreEl.classList.remove('pop'), 120);
+
+                audio.playScore();
+                spawnScoreSparkles(bird.x, bird.y - 20);
+            }
+        });
+
+        pipes = pipes.filter(p => p.x + p.width > -40);
+    }
+}
+
+function drawBackground() {
+    // 1. 晴空漸層背景
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, H - groundHeight);
+    skyGrad.addColorStop(0, '#38a3d1');
+    skyGrad.addColorStop(0.65, '#72d6e3');
+    skyGrad.addColorStop(1, '#c9f2c7');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, W, H - groundHeight);
+
+    // 2. 遠處暖陽
+    ctx.fillStyle = 'rgba(255, 250, 205, 0.55)';
+    ctx.beginPath();
+    ctx.arc(W * 0.78, H * 0.22, 42, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3. 像素風格蓬鬆雲朵
+    clouds.forEach(c => {
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.scale(c.scale, c.scale);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 22, 0, Math.PI * 2);
+        ctx.arc(20, -6, 26, 0, Math.PI * 2);
+        ctx.arc(42, 0, 20, 0, Math.PI * 2);
+        ctx.arc(20, 8, 22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+
+    const groundY = H - groundHeight;
+
+    // 4. 遠景城市建築天際線
+    buildings.forEach(b => {
+        const by = groundY - b.h;
+        ctx.fillStyle = '#8ecae6';
+        ctx.fillRect(b.x, by, b.w, b.h);
+        ctx.strokeStyle = '#6da9c7';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(b.x, by, b.w, b.h);
+
+        // 建築物小窗戶
+        ctx.fillStyle = '#bfe6f7';
+        for (let row = 0; row < b.windows; row++) {
+            ctx.fillRect(b.x + 8, by + 10 + row * 16, 6, 8);
+            ctx.fillRect(b.x + b.w - 14, by + 10 + row * 16, 6, 8);
+        }
+    });
+
+    // 5. 中景綠意灌木叢
+    ctx.fillStyle = '#70c167';
+    bushes.forEach(bush => {
+        ctx.beginPath();
+        ctx.arc(bush.x, groundY, bush.r, Math.PI, 0);
+        ctx.fill();
+    });
+}
+
+function drawGround() {
+    const groundY = H - groundHeight;
+
+    // 泥土底色
+    ctx.fillStyle = '#ded895';
+    ctx.fillRect(0, groundY, W, groundHeight);
+
+    // 泥土深色紋理帶
+    ctx.fillStyle = '#cbbd72';
+    ctx.fillRect(0, groundY + 24, W, groundHeight - 24);
+
+    // 頂部鮮綠草皮帶
+    const grassH = 22;
+    ctx.fillStyle = '#73bf2e';
+    ctx.fillRect(0, groundY, W, grassH);
+
+    // 斜紋條紋滾動效果（經典 Flappy Bird 標誌性動態地面）
+    ctx.fillStyle = '#9ce659';
+    for (let x = -32 - groundOffset; x < W + 32; x += 32) {
+        ctx.beginPath();
+        ctx.moveTo(x, groundY + grassH);
+        ctx.lineTo(x + 14, groundY + grassH);
+        ctx.lineTo(x + 24, groundY);
+        ctx.lineTo(x + 10, groundY);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // 地面上下深色邊框線
+    ctx.fillStyle = '#222034';
+    ctx.fillRect(0, groundY, W, 3.5);
+    ctx.fillRect(0, groundY + grassH, W, 3.5);
+}
+
+function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.save();
+    // 撞擊瞬間畫面震動
+    if (shakeTimer > 0) {
+        const intensity = (shakeTimer / 0.28) * 9;
+        ctx.translate((Math.random() - 0.5) * intensity, (Math.random() - 0.5) * intensity);
+    }
+
+    // 繪製背景
+    drawBackground();
+
+    // 繪製水管
+    pipes.forEach(p => p.draw());
+
+    // 繪製地面（覆蓋在底部水管根部之上，呈現真實插入效果）
+    drawGround();
+
+    // 繪製粒子
+    particles.forEach(p => {
+        ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    });
+    ctx.globalAlpha = 1;
+
+    // 繪製飛鳥
+    if (bird) {
+        bird.draw();
+    }
+
+    // 撞擊白光閃爍效果
+    if (screenFlash > 0) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${screenFlash})`;
+        ctx.fillRect(0, 0, W, H);
+    }
+
+    ctx.restore();
+}
+
+function gameLoop(timestamp) {
+    if (!lastTime) lastTime = timestamp;
+    const dt = Math.min(0.05, (timestamp - lastTime) / 1000);
+    lastTime = timestamp;
+
+    update(dt);
+    draw();
+
+    requestAnimationFrame(gameLoop);
+}
+
+/**
+ * ============================================================================
+ * 輸入與互動事件監聽（鍵盤、滑鼠、觸控螢幕）
+ * ============================================================================
+ */
+function handlePrimaryAction(e) {
+    if (e && e.target && (e.target.id === 'sound-toggle' || e.target.id === 'restart-btn')) {
+        return;
+    }
+
+    if (gameState === 'START') {
+        startGame();
+    } else if (gameState === 'PLAYING') {
+        bird.flap();
+    }
+}
+
+// 鍵盤空白鍵 / 向上鍵
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+        e.preventDefault();
+        if (e.repeat) return; // 防止長按連續觸發
+        if (gameState === 'GAMEOVER' && gameoverOverlay.classList.contains('visible')) {
+            resetToStart();
+            startGame();
+        } else {
+            handlePrimaryAction();
+        }
+    }
+});
+
+// 滑鼠點擊（支援桌機）
+const wrapper = document.getElementById('game-wrapper');
+wrapper.addEventListener('mousedown', (e) => {
+    if (e.button === 0) {
+        handlePrimaryAction(e);
+    }
+});
+
+// 手機/平板觸控螢幕（zero-latency touchstart）
+wrapper.addEventListener('touchstart', (e) => {
+    if (e.target && (e.target.id === 'sound-toggle' || e.target.id === 'restart-btn')) {
+        return;
+    }
+    e.preventDefault();
+    handlePrimaryAction(e);
+}, { passive: false });
+
+// 重新開始按鈕
+restartBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    resetToStart();
+    startGame();
+});
+
+// 音效開關按鈕
+soundToggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    audio.init();
+    const isMuted = audio.toggleMute();
+    soundToggleBtn.textContent = isMuted ? '🔇 音效: 關' : '🔊 音效: 開';
+    soundToggleBtn.classList.toggle('muted', isMuted);
+});
+
+window.addEventListener('resize', resizeCanvas);
+
+// 初始化啟動
+window.onload = function () {
+    resizeCanvas();
+    resetToStart();
+    requestAnimationFrame(gameLoop);
+};
+</script>
+</body>
+</html>
